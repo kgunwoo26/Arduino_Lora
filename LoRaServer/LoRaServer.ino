@@ -3,6 +3,8 @@
 #include "ESP8266WiFi.h"
 #include "ESP8266WebServer.h"
 #include <ArduinoJson.h>
+#include <Thread.h>
+#include <ThreadController.h>
 
 
 ESP8266WebServer server(80);
@@ -14,6 +16,11 @@ ESP8266WebServer server(80);
 #define ATSerial Serial
 #define MAX_SIZE 100
 
+ThreadController controll = ThreadController();
+
+Thread myThread = Thread();
+Thread myThread2 = Thread();
+
 struct device {
   String id;
   String distance;
@@ -21,7 +28,7 @@ struct device {
 };
 
 //16byte hex key
-String lora_app_key = "11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff 00"; 
+String lora_app_key = "11 22 55 44 55 66 77 88 99 aa bb cc dd ee ff 00"; 
 
 SoftwareSerial DebugSerial(RXpin,TXpin);
 SNIPE SNIPE(ATSerial);
@@ -71,6 +78,15 @@ void setup() {
     DebugSerial.println("SNIPE LoRa Rx Timout value has not been changed");
   }  
   DebugSerial.println("SNIPE LoRa PingPong Test");
+
+  myThread.onRun(LoraCallback);
+  myThread.setInterval(300);
+  
+  myThread2.onRun(serverCallback);
+  myThread2.setInterval(100);
+
+  controll.add(&myThread);
+  controll.add(&myThread2);
 }
 
 void split(){
@@ -125,14 +141,22 @@ void update(){
       if(devices[i].id == recv_data[0]) index = i;
     }
     if(index == -1){ index = size++;}
-    if(!recv_data[0].equals("AT_RX_TIMEOUT"))
+    if(recv_data[0].equals("A") || recv_data[0].equals("B"))
       devices[index] ={recv_data[0],recv_data[1],recv_data[2]};
+      
 }
 
-void loop() {
+void serverCallback(){
   server.handleClient();
+}
+
+void LoraCallback(){
   load_recv = SNIPE.lora_recv();
   if(load_recv != NULL) update();
   DebugSerial.println(load_recv);
-  delay(300);
+}
+
+
+void loop() {
+  controll.run();
 }
